@@ -1,3 +1,8 @@
+.ipynb_checkpoints
+liuhaotian
+.idea
+data/MM_safety_extra_data
+data/MathVista
 */__pycache__/
 __pycache__/
 output/
