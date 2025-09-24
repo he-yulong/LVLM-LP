@@ -1,0 +1,3 @@
+[submodule "extern/LLaVA"]
+	path = extern/LLaVA
+	url = https://github.com/haotian-liu/LLaVA.git
