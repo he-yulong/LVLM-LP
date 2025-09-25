@@ -4,7 +4,7 @@ import json
 from dataset.base import BaseDataset
 
 class MMSafetyBench(BaseDataset):
-    def __init__(self, prompter, split="SD_TYPO", data_root="/data/MM-SafetyBench/"):
+    def __init__(self, prompter, split="SD_TYPO", data_root="./data/MM-SafetyBench/"):
         super(MMSafetyBench, self).__init__()
         self.ann_root = data_root
         self.img_root = data_root
