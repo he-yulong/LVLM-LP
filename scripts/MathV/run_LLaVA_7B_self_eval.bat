@@ -24,6 +24,7 @@ python run_model.py ^
   --split testmini ^
   --dataset MathVista ^
   --answers_file %OUTPUT_FILE% ^
+  --prompt conf ^
   --num_chunks 1 ^
   --chunk_idx 0 ^
   --temperature 0.0 ^
