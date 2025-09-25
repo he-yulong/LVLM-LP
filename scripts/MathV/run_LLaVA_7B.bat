@@ -21,6 +21,7 @@ python run_model.py ^
   --answers_file %OUTPUT_FILE% ^
   --num_chunks 1 ^
   --chunk_idx 0 ^
+  --prompt oe ^
   --temperature 0.0 ^
   --top_p 0.9 ^
   --num_beams 1
