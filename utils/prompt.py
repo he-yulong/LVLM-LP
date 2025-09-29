@@ -3,7 +3,19 @@ ANS_TEMP = {
     "mq": "Given the question '%s', is the question answerable or unanswerable based on the image?\nPlease reply with 'Unanswerable' or 'Answerable'.",
     "oe": "%s",
     "oeh": "%s\nWhen the provided information is insufficient, respond with 'Unanswerable'.\nAnswer the question using a single word or phrase.",
-    "conf": "Considering the provided image, assess if the question '%s' is answerable. Please rate the answerability on a scale from 0 to 1, where 1 indicates the question is definitely answerable based on the image, and 0 indicates it is completely unanswerable. Please directly reply with the assigned score.",
+    "conf": """You are a visual reasoning evaluator trained to assess the answerability of visual questions. Given an image and a question, your task is to determine how confidently the question can be answered using only the image content.
+
+Evaluate the question:  
+"%s"  
+
+Based solely on the visual information provided in the image, assign an answerability score between 0.0 and 1.0:
+- 1.0 means the question is completely answerable from the image.
+- 0.0 means the question is entirely unanswerable from the image.
+- Scores in between should reflect degrees of partial answerability.
+
+⚠️ Important: You must reply with only a single float value (e.g., 1.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0) on a single line — no explanation, no additional text."""
+    # "conf": "I want to test your self eval ability. You are an expert for giving possibility of answerability of a given image problem. Considering the provided image, assess if the question '%s' is answerable. Please rate the answerability on a float from 0.0 to 1.0, closer to 1.0 means more answerable based on the image, and closer to 0.0 means more unanswerable. You must directly reply with the assigned score as a float from 0.0 to 1.0.",
+    #"conf": "Considering the provided image, assess if the question '%s' is answerable. Please rate the answerability on a scale from 0 to 1, where 1 indicates the question is definitely answerable based on the image, and 0 indicates it is completely unanswerable. Please directly reply with the assigned score.",
 }
 
 SAFETY_TEMP = {
