@@ -16,6 +16,56 @@ from llava.utils import disable_torch_init
 from llava.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
 from model.base import LargeMultimodalModel
 
+from transformers import LogitsProcessor
+class SafetyLogitsProcessor(LogitsProcessor):
+    def __init__(self, safety_model_path, tokenizer, refusal_phrase="I cannot help you with that.", threshold=0.5):
+        self.threshold = threshold
+        self.lr_model = torch.load(safety_model_path, map_location="cpu")
+        self.weights = self.lr_model['weights']    # shape: [1, vocab_size] if saved as in your code
+        self.bias = self.lr_model['bias']          # shape: [1]
+        # Build safe phrase ids WITHOUT adding specials
+        self.safe_ids = tokenizer.encode(refusal_phrase, add_special_tokens=False)
+        # append eos so decoding will stop cleanly after the phrase
+        if tokenizer.eos_token_id is not None:
+            self.safe_ids = self.safe_ids + [tokenizer.eos_token_id]
+        # runtime state
+        self.active = False     # becomes True when probe says "unsafe"
+        self.step = 0           # which token of safe_ids we’re forcing next
+
+    def __call__(self, input_ids, scores):
+        # If we are already in "active" mode, keep forcing the phrase
+        if self.active:
+            forced_id = self.safe_ids[min(self.step, len(self.safe_ids)-1)]
+            safe_logits = torch.full_like(scores, -float("inf"))
+            safe_logits[0, forced_id] = 0.0
+            self.step += 1
+            return safe_logits
+
+        # Otherwise, run the LR probe on the **current** next-token logits
+        next_token_logits = scores  # [1, vocab_size]
+        device = next_token_logits.device
+
+        weights = self.weights.to(device)  # [1, vocab_size]
+        bias = self.bias.to(device)        # [1]
+
+        # logistic regression score & prob
+        lr_logits = torch.matmul(next_token_logits, weights.T) + bias  # [1,1]
+        prob = torch.sigmoid(lr_logits).item()
+
+        # If unsafe → activate & force the first token of refusal
+        if prob < self.threshold:
+            self.active = True
+            self.step = 0
+            forced_id = self.safe_ids[self.step]
+            safe_logits = torch.full_like(scores, -float("inf"))
+            safe_logits[0, forced_id] = 0.0
+            self.step += 1
+            return safe_logits
+
+        # safe: let the model proceed normally
+        return scores
+
+USE_DECODING_STRATEGY = False
 class LLaVA(LargeMultimodalModel):
     def __init__(self, args):
         super(LLaVA, self).__init__()
@@ -70,25 +120,60 @@ class LLaVA(LargeMultimodalModel):
         streamer = TextStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
 
         with torch.inference_mode():
-            outputs = self.model.generate(
-                input_ids,
-                images=image_tensor,
-                
-                do_sample=True if self.temperature > 0 else False,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                num_beams=self.num_beams,
-                
-                max_new_tokens=100,
-                streamer=streamer,
-                use_cache=True,
-                
-                stopping_criteria=[stopping_criteria],
-                
-                return_dict_in_generate=return_dict,
-                output_attentions=return_dict,
-                output_hidden_states=return_dict,
-                output_scores=return_dict)
+            if USE_DECODING_STRATEGY:
+                from transformers import LogitsProcessorList
+
+                # inside _basic_forward(...)
+                logits_processors = LogitsProcessorList()
+                safety_model_path = "./output/LLaVA-7B/lr_model_safety_oe.pt"
+                if os.path.exists(safety_model_path):
+                    print("Safety model loaded: applying safety-aware decoding.")
+                    logits_processors.append(
+                        SafetyLogitsProcessor(
+                            safety_model_path=safety_model_path,
+                            tokenizer=self.tokenizer,
+                            refusal_phrase="Sorry, I cannot help with that due to safety concerns.",
+                            threshold=0.5
+                        )
+                    )
+
+                outputs = self.model.generate(
+                    input_ids,
+                    images=image_tensor,
+                    logits_processor=logits_processors,
+                    do_sample=True if self.temperature > 0 else False,
+                    temperature=self.temperature,
+                    top_p=self.top_p,
+                    num_beams=self.num_beams,
+                    max_new_tokens=100,
+                    streamer=streamer,
+                    use_cache=True,
+                    stopping_criteria=[stopping_criteria],
+                    return_dict_in_generate=return_dict,
+                    output_attentions=return_dict,
+                    output_hidden_states=return_dict,
+                    output_scores=return_dict,
+                )
+            else:
+                outputs = self.model.generate(
+                    input_ids,
+                    images=image_tensor,
+
+                    do_sample=True if self.temperature > 0 else False,
+                    temperature=self.temperature,
+                    top_p=self.top_p,
+                    num_beams=self.num_beams,
+
+                    max_new_tokens=100,
+                    streamer=streamer,
+                    use_cache=True,
+
+                    stopping_criteria=[stopping_criteria],
+
+                    return_dict_in_generate=return_dict,
+                    output_attentions=return_dict,
+                    output_hidden_states=return_dict,
+                    output_scores=return_dict)
             
         return input_ids, outputs
     
@@ -107,7 +192,26 @@ class LLaVA(LargeMultimodalModel):
             probs = torch.cat(probs).cpu().numpy()
             output_ids = outputs["sequences"][0][len(input_ids):]
             
-        response = self.tokenizer.decode(output_ids).strip()[:-4]
+        # If in conf mode, try to parse numeric value
+        if "considering the provided image" in prompt.lower():  # crude check for conf prompt
+            print(output_ids)
+            response_text = self.tokenizer.decode(output_ids, skip_special_tokens=True).strip()
+            print(f"Raw response: {response_text}")
+            try:
+                # Extract the first float-like number from the response
+                import re
+                match = re.search(r"[-+]?\d*\.?\d+", response_text)
+                if match:
+                    response = float(match.group(0))
+                else:
+                    print(f"No float-like number found in the response")
+                    response = 0.0
+                print(f"Parsed confidence: {response}")
+            except Exception as e:
+                print(f"Parse error: {e}")
+                response = 0.0
+        else:
+            response = self.tokenizer.decode(output_ids).strip()[:-4]
 
         output_ids = output_ids.cpu().numpy()
 #         output_probs = [probs[i][output_ids[i]] for i in range(len(probs))]
