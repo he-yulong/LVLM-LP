@@ -3,7 +3,7 @@ ANS_TEMP = {
     "mq": "Given the question '%s', is the question answerable or unanswerable based on the image?\nPlease reply with 'Unanswerable' or 'Answerable'.",
     "oe": "%s",
     "oeh": "%s\nWhen the provided information is insufficient, respond with 'Unanswerable'.\nAnswer the question using a single word or phrase.",
-    "conf": """You are a visual reasoning evaluator trained to assess the answerability of visual questions. Given an image and a question, your task is to determine how confidently the question can be answered using only the image content.
+    "confv0": """You are a visual reasoning evaluator trained to assess the answerability of visual questions. Given an image and a question, your task is to determine how confidently the question can be answered using only the image content.
 
 Evaluate the question:  
 "%s"  
@@ -13,7 +13,28 @@ Based solely on the visual information provided in the image, assign an answerab
 - 0.0 means the question is entirely unanswerable from the image.
 - Scores in between should reflect degrees of partial answerability.
 
-⚠️ Important: You must reply with only a single float value (e.g., 1.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0) on a single line — no explanation, no additional text."""
+Important: You must reply with only a single float value (e.g., 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0) on a single line — no explanation, no additional text.""",
+
+    "conf": """You are evaluating whether a visual mathematics question can be answered using only the information visible in the provided image.
+
+Question to evaluate: "%s"
+
+Your task: Determine if someone could answer this question by looking ONLY at the image, without any external knowledge beyond basic mathematical concepts.
+
+Scoring guidelines:
+- 1.0: All information needed is clearly visible in the image (numbers, labels, diagrams, charts, geometric figures, etc.)
+- 0.7-0.9: Most information is visible, but some minor details may require reasonable inference from visual context
+- 0.4-0.6: Some key information is visible, but significant elements are missing or unclear
+- 0.1-0.3: Very little necessary information is in the image; question requires substantial external knowledge
+- 0.0: The image contains none of the information needed to answer the question
+
+Consider:
+- Are all referenced objects, numbers, or measurements visible?
+- Can geometric properties, quantities, or relationships be determined from the image?
+- Does the question ask about something shown vs. something requiring outside knowledge?
+- Is text/data in the image legible and sufficient?
+
+Output only a single float value (0.0, 0.1, 0.2, ... 0.9, 1.0) with no explanation."""
     # "conf": "I want to test your self eval ability. You are an expert for giving possibility of answerability of a given image problem. Considering the provided image, assess if the question '%s' is answerable. Please rate the answerability on a float from 0.0 to 1.0, closer to 1.0 means more answerable based on the image, and closer to 0.0 means more unanswerable. You must directly reply with the assigned score as a float from 0.0 to 1.0.",
     #"conf": "Considering the provided image, assess if the question '%s' is answerable. Please rate the answerability on a scale from 0 to 1, where 1 indicates the question is definitely answerable based on the image, and 0 indicates it is completely unanswerable. Please directly reply with the assigned score.",
 }
